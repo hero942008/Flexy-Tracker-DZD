@@ -86,19 +86,25 @@ fun HomeScreen(
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // Permission launcher for SMS reception
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        viewModel.setSmsPermissionGranted(isGranted)
+    // Permission launcher for SMS reception and reading
+    val permissionsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val receiveGranted = permissions[Manifest.permission.RECEIVE_SMS] == true
+        val readGranted = permissions[Manifest.permission.READ_SMS] == true
+        viewModel.setSmsPermissionGranted(receiveGranted || readGranted)
     }
 
     LaunchedEffect(Unit) {
-        val hasPermission = ContextCompat.checkSelfPermission(
+        val hasReceive = ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.RECEIVE_SMS
         ) == PackageManager.PERMISSION_GRANTED
-        viewModel.setSmsPermissionGranted(hasPermission)
+        val hasRead = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.READ_SMS
+        ) == PackageManager.PERMISSION_GRANTED
+        viewModel.setSmsPermissionGranted(hasReceive || hasRead)
     }
 
     Scaffold(
@@ -205,7 +211,12 @@ fun HomeScreen(
                             .fillMaxWidth()
                             .clickable {
                                 if (!uiState.isSmsPermissionGranted) {
-                                    permissionLauncher.launch(Manifest.permission.RECEIVE_SMS)
+                                    permissionsLauncher.launch(
+                                        arrayOf(
+                                            Manifest.permission.RECEIVE_SMS,
+                                            Manifest.permission.READ_SMS
+                                        )
+                                    )
                                 }
                             }
                             .testTag("sms_permission_banner")
