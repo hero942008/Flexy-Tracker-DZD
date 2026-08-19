@@ -28,11 +28,6 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Accept Android Licenses & Install SDK Components
-        run: |
-          yes | sdkmanager --licenses || true
-          sdkmanager "platforms;android-35" "build-tools;35.0.0" || true
-
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -47,8 +42,20 @@ jobs:
             touch .env
           fi
 
+      - name: Prepare Gradle Wrapper
+        run: |
+          if [ ! -f "./gradlew" ]; then
+            gradle wrapper --gradle-version 9.3.1
+          fi
+          chmod +x ./gradlew || true
+
       - name: Build Debug APK
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        run: |
+          if [ -f "./gradlew" ]; then
+            ./gradlew assembleDebug --no-daemon --stacktrace
+          else
+            gradle assembleDebug --no-daemon --stacktrace
+          fi
 
       - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
@@ -61,15 +68,16 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: v1.0.0-build-${{ github.run_number }}
-          name: Flexy APK Build #${{ github.run_number }}
+          tag_name: v1.0.7-build-${{ github.run_number }}
+          name: Flexy APK v1.0.7 (Build #${{ github.run_number }})
           draft: false
           prerelease: false
           body: |
-            ## 🎉 Flexy Tracker APK Build
+            ## 🎉 Flexy Tracker APK v1.0.7
+            - **Version:** 1.0.7
             - **Build Number:** ${{ github.run_number }}
             - **Commit:** ${{ github.sha }}
-            - **Download:** You can download the `.apk` file below directly to your phone.
+            - **Download:** Download `app-debug.apk` below directly to your phone.
           files: app/build/outputs/apk/debug/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
