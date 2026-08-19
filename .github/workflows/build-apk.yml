@@ -28,10 +28,16 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Accept Android Licenses & Install SDK Components
+        run: |
+          yes | sdkmanager --licenses || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" || true
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.3.1'
+          cache-cleanup: always
 
       - name: Ensure Environment and Config Files
         run: |
@@ -40,11 +46,6 @@ jobs:
           elif [ ! -f .env ]; then
             touch .env
           fi
-
-      - name: Ensure Gradle Wrapper Executable
-        run: |
-          gradle wrapper --gradle-version 9.3.1
-          chmod +x ./gradlew
 
       - name: Build Debug APK
         run: ./gradlew assembleDebug --no-daemon --stacktrace
@@ -58,7 +59,7 @@ jobs:
 
       - name: Create GitHub Release and Upload APK
         uses: softprops/action-gh-release@v2
-        if: always()
+        if: success()
         with:
           tag_name: v1.0.0-build-${{ github.run_number }}
           name: Flexy APK Build #${{ github.run_number }}
