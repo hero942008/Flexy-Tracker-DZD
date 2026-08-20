@@ -36,11 +36,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.FlexyTransaction
 import com.example.data.repository.CurrencyMode
-import com.example.ui.theme.DjezzyRed
 import com.example.ui.theme.ManualBlue
 import com.example.ui.theme.MobilisGreen
 import com.example.ui.theme.OnVibrantPurpleContainer
-import com.example.ui.theme.OoredooRuby
 import com.example.ui.theme.VibrantFeeRed
 import com.example.ui.theme.VibrantNetGreen
 import com.example.ui.theme.VibrantPurpleContainer
@@ -55,12 +53,7 @@ fun TransactionItem(
     onDelete: (FlexyTransaction) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val operatorBadgeColor = when (transaction.operatorName.lowercase()) {
-        "mobilis" -> MobilisGreen
-        "djezzy" -> DjezzyRed
-        "ooredoo" -> OoredooRuby
-        else -> ManualBlue
-    }
+    val operatorBadgeColor = MobilisGreen
 
     Card(
         modifier = modifier

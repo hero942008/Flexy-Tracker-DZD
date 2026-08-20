@@ -47,9 +47,7 @@ class FlexyRepository(
 
     private val _operatorSenders = MutableStateFlow(
         OperatorSenderConfig(
-            mobilisSenders = prefs.getString("senders_mobilis", OperatorSenderConfig.DEFAULT_MOBILIS) ?: OperatorSenderConfig.DEFAULT_MOBILIS,
-            djezzySenders = prefs.getString("senders_djezzy", OperatorSenderConfig.DEFAULT_DJEZZY) ?: OperatorSenderConfig.DEFAULT_DJEZZY,
-            ooredooSenders = prefs.getString("senders_ooredoo", OperatorSenderConfig.DEFAULT_OOREDOO) ?: OperatorSenderConfig.DEFAULT_OOREDOO
+            mobilisSenders = prefs.getString("senders_mobilis", OperatorSenderConfig.DEFAULT_MOBILIS) ?: OperatorSenderConfig.DEFAULT_MOBILIS
         )
     )
     val operatorSenders: StateFlow<OperatorSenderConfig> = _operatorSenders.asStateFlow()
@@ -113,8 +111,6 @@ class FlexyRepository(
         _operatorSenders.value = config
         prefs.edit()
             .putString("senders_mobilis", config.mobilisSenders)
-            .putString("senders_djezzy", config.djezzySenders)
-            .putString("senders_ooredoo", config.ooredooSenders)
             .apply()
     }
 

@@ -1,6 +1,6 @@
 {
-  "name": "Flexy ",
-  "description": "تطبيق لتتبع وتسجيل رسائل ومعاملات الفليكسي تلقائياً واقتطاع نسبة 10% وحساب الصافي اليومي",
+  "name": "TRACKER FLEXY MOBILIS ONLY",
+  "description": "تطبيق لتتبع وتسجيل رسائل ومعاملات الفليكسي لشبكة موبيليس تلقائياً واحتساب الصافي",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

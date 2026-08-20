@@ -47,8 +47,6 @@ val VibrantDarkOnPeach = Color(0xFFFFDBCF)
 
 // Telecom Operator Accents
 val MobilisGreen = Color(0xFF00873D)
-val DjezzyRed = Color(0xFFD90429)
-val OoredooRuby = Color(0xFFC8102E)
 val ManualBlue = Color(0xFF2563EB)
 
 // Backward compatibility aliases

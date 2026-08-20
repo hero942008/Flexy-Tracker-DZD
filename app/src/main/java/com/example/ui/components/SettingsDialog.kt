@@ -1,5 +1,12 @@
 package com.example.ui.components
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -18,16 +25,25 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AddCircle
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.Power
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sms
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -55,20 +71,26 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.OperatorSenderConfig
 import com.example.data.repository.CurrencyMode
-import com.example.ui.theme.DjezzyRed
 import com.example.ui.theme.MobilisGreen
 import com.example.ui.theme.OnVibrantPurpleContainer
-import com.example.ui.theme.OoredooRuby
 import com.example.ui.theme.VibrantFeeRed
+import com.example.ui.theme.VibrantNetGreen
 import com.example.ui.theme.VibrantPeachContainer
 import com.example.ui.theme.VibrantPurpleContainer
 import com.example.ui.theme.VibrantPurplePrimary
+import com.example.util.CurrencyFormatter
+
+private const val REQUIRED_PASSWORD = "20082008"
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -78,16 +100,37 @@ fun SettingsDialog(
     operatorSenders: OperatorSenderConfig,
     onDismiss: () -> Unit,
     onSavePercentage: (Double) -> Unit,
-    onSaveOperatorSenders: (String, String, String) -> Unit,
+    onSaveOperatorSenders: (String) -> Unit,
     onResetOperatorSenders: () -> Unit,
     onToggleCurrency: (CurrencyMode) -> Unit,
-    onClearAll: () -> Unit
+    onClearAll: () -> Unit,
+    onAddManualTransaction: (amount: Double, note: String?) -> Unit
 ) {
+    val context = LocalContext.current
     var selectedPercentage by remember { mutableDoubleStateOf(currentPercentage) }
     var mobilisSenders by remember { mutableStateOf(operatorSenders.mobilisSenders) }
-    var djezzySenders by remember { mutableStateOf(operatorSenders.djezzySenders) }
-    var ooredooSenders by remember { mutableStateOf(operatorSenders.ooredooSenders) }
     var showClearConfirmation by remember { mutableStateOf(false) }
+
+    // Password & Manual Add State
+    var passwordInput by remember { mutableStateOf("") }
+    var isPasswordVisible by remember { mutableStateOf(false) }
+    var isUnlocked by remember { mutableStateOf(false) }
+    var passwordError by remember { mutableStateOf<String?>(null) }
+    var manualAmountText by remember { mutableStateOf("") }
+    var manualNoteText by remember { mutableStateOf("") }
+    var manualAddSuccessMsg by remember { mutableStateOf<String?>(null) }
+
+    // Battery optimization status
+    val powerManager = remember { context.getSystemService(Context.POWER_SERVICE) as? PowerManager }
+    var isBatteryIgnored by remember {
+        mutableStateOf(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && powerManager != null) {
+                powerManager.isIgnoringBatteryOptimizations(context.packageName)
+            } else {
+                true
+            }
+        )
+    }
 
     val quickPercentages = listOf(5.0, 7.0, 8.0, 10.0, 12.0, 15.0, 20.0)
 
@@ -262,7 +305,281 @@ fun SettingsDialog(
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-                // Section 3: Telecom Operator SMS Senders Configuration
+                // Section 3: Battery Optimization Setting (Background continuous operation)
+                Card(
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isBatteryIgnored) VibrantNetGreen.copy(alpha = 0.1f) else VibrantPeachContainer.copy(alpha = 0.4f)
+                    ),
+                    border = BorderStroke(1.dp, if (isBatteryIgnored) VibrantNetGreen.copy(alpha = 0.4f) else VibrantPurplePrimary.copy(alpha = 0.3f)),
+                    modifier = Modifier.fillMaxWidth().testTag("battery_optimization_card")
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isBatteryIgnored) Icons.Default.CheckCircle else Icons.Default.Bolt,
+                                contentDescription = null,
+                                tint = if (isBatteryIgnored) VibrantNetGreen else VibrantPurplePrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                text = "تشغيل التطبيق في الخلفية (توفير البطارية)",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+
+                        Text(
+                            text = if (isBatteryIgnored) {
+                                "✅ تم إيقاف توفير البطارية للتطبيق: يعمل باستمرار في الخلفية لقراءة وتتبع رسائل فليكسي موبيليس فور وصولها."
+                            } else {
+                                "⚠️ توفير البطارية نشط في النظام: قد يقوم أندرويد بتعليق التطبيق أو تأخير وصول إشعارات الرسائل. يُنصح بإيقاف توفير البطارية لضمان العمل التلقائي الفوري."
+                            },
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            lineHeight = 16.sp
+                        )
+
+                        if (!isBatteryIgnored) {
+                            Button(
+                                onClick = {
+                                    try {
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                                                data = Uri.parse("package:${context.packageName}")
+                                            }
+                                            context.startActivity(intent)
+                                        } else {
+                                            val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                                            context.startActivity(intent)
+                                        }
+                                        Toast.makeText(context, "يرجى اختيار 'عدم التحسين' أو 'السماح بالعمل في الخلفية'", Toast.LENGTH_LONG).show()
+                                    } catch (e: Exception) {
+                                        try {
+                                            val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                                            context.startActivity(intent)
+                                        } catch (ex: Exception) {
+                                            Toast.makeText(context, "افتح إعدادات الهاتف > البطارية > تحسين البطارية > اختر حاسبة الفليكسي", Toast.LENGTH_LONG).show()
+                                        }
+                                    }
+                                },
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = VibrantPurplePrimary),
+                                modifier = Modifier.fillMaxWidth().testTag("disable_battery_optimization_btn")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Power,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("إيقاف توفير البطارية للتطبيق", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                // Section 4: Password-Protected Manual Amount Adding
+                Card(
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isUnlocked) VibrantPurpleContainer.copy(alpha = 0.35f) else MaterialTheme.colorScheme.surface
+                    ),
+                    border = BorderStroke(1.dp, if (isUnlocked) VibrantPurplePrimary else MaterialTheme.colorScheme.outline),
+                    modifier = Modifier.fillMaxWidth().testTag("manual_add_locked_card")
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isUnlocked) Icons.Default.LockOpen else Icons.Default.Lock,
+                                contentDescription = null,
+                                tint = if (isUnlocked) VibrantPurplePrimary else VibrantFeeRed,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Column {
+                                Text(
+                                    text = "إضافة مبلغ فليكسي يدوياً (كتابياً)",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = if (isUnlocked) "القسم مفتوح وجاهز للإدخال" else "مقفل بكلمة سر خاصة للمصادقة",
+                                    fontSize = 10.sp,
+                                    color = if (isUnlocked) VibrantPurplePrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        if (!isUnlocked) {
+                            // Password input field
+                            OutlinedTextField(
+                                value = passwordInput,
+                                onValueChange = {
+                                    passwordInput = it
+                                    passwordError = null
+                                    if (it == REQUIRED_PASSWORD) {
+                                        isUnlocked = true
+                                        passwordError = null
+                                    }
+                                },
+                                label = { Text("أدخل كلمة السر", fontSize = 12.sp) },
+                                placeholder = { Text("كلمة السر المطلوبة", fontSize = 11.sp) },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                                visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                                trailingIcon = {
+                                    IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
+                                        Icon(
+                                            imageVector = if (isPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                            contentDescription = "إظهار / إخفاء كلمة السر"
+                                        )
+                                    }
+                                },
+                                isError = passwordError != null,
+                                modifier = Modifier.fillMaxWidth().testTag("password_input_field"),
+                                shape = RoundedCornerShape(10.dp)
+                            )
+
+                            if (passwordError != null) {
+                                Text(
+                                    text = passwordError ?: "",
+                                    color = VibrantFeeRed,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+
+                            Button(
+                                onClick = {
+                                    if (passwordInput == REQUIRED_PASSWORD) {
+                                        isUnlocked = true
+                                        passwordError = null
+                                    } else {
+                                        passwordError = "كلمة المرور غير صحيحة!"
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = VibrantPurplePrimary),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth().testTag("unlock_manual_add_btn")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.LockOpen,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("فتح الإدخال اليدوي", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        } else {
+                            // Unlocked: Manual Input Form
+                            OutlinedTextField(
+                                value = manualAmountText,
+                                onValueChange = {
+                                    manualAmountText = it.filter { ch -> ch.isDigit() || ch == '.' }
+                                    manualAddSuccessMsg = null
+                                },
+                                label = { Text("المبلغ بالدينار الجزائري (DA)", fontSize = 12.sp) },
+                                placeholder = { Text("مثال: 1000 أو 500", fontSize = 11.sp) },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth().testTag("manual_amount_input")
+                            )
+
+                            // Centimes live preview
+                            val parsedAmount = manualAmountText.toDoubleOrNull()
+                            if (parsedAmount != null && parsedAmount > 0) {
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = VibrantPurplePrimary.copy(alpha = 0.1f),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = "المعادل: ${CurrencyFormatter.getAlgerianSpokenLabel(parsedAmount)} ➔ الصافي: ${CurrencyFormatter.formatDinar(parsedAmount * (1.0 - selectedPercentage / 100.0))}",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = VibrantPurplePrimary,
+                                        modifier = Modifier.padding(8.dp)
+                                    )
+                                }
+                            }
+
+                            OutlinedTextField(
+                                value = manualNoteText,
+                                onValueChange = { manualNoteText = it },
+                                label = { Text("ملاحظة (اختياري)", fontSize = 12.sp) },
+                                placeholder = { Text("مثال: شحن يدوي للزبون", fontSize = 11.sp) },
+                                singleLine = true,
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth().testTag("manual_note_input")
+                            )
+
+                            if (manualAddSuccessMsg != null) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = VibrantNetGreen,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = manualAddSuccessMsg ?: "",
+                                        color = VibrantNetGreen,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            Button(
+                                onClick = {
+                                    val amt = manualAmountText.toDoubleOrNull()
+                                    if (amt != null && amt > 0) {
+                                        onAddManualTransaction(amt, manualNoteText.ifBlank { null })
+                                        manualAddSuccessMsg = "تمت إضافة مبلغ $amt دج بنجاح!"
+                                        manualAmountText = ""
+                                        manualNoteText = ""
+                                    }
+                                },
+                                enabled = (manualAmountText.toDoubleOrNull() ?: 0.0) > 0,
+                                colors = ButtonDefaults.buttonColors(containerColor = VibrantPurplePrimary),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth().testTag("submit_manual_amount_btn")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AddCircle,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("إضافة الرصيد وتسجيل العملية", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                // Section 5: Mobilis SMS Senders Configuration
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -280,7 +597,7 @@ fun SettingsDialog(
                                 modifier = Modifier.size(18.dp)
                             )
                             Text(
-                                text = "أرقام ومرسلي رسائل التعبئة",
+                                text = "أرقام ومرسلي فليكسي موبيليس",
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -289,8 +606,6 @@ fun SettingsDialog(
                         TextButton(
                             onClick = {
                                 mobilisSenders = OperatorSenderConfig.DEFAULT_MOBILIS
-                                djezzySenders = OperatorSenderConfig.DEFAULT_DJEZZY
-                                ooredooSenders = OperatorSenderConfig.DEFAULT_OOREDOO
                             }
                         ) {
                             Icon(
@@ -304,13 +619,13 @@ fun SettingsDialog(
                     }
 
                     Text(
-                        text = "حدد أرقام أو أسماء المرسلين لكل متعامل (مفصولة بفاصلة) للتعرف على رصيد الفليكسي تلقائياً عند وصول الرسائل القصيرة:",
+                        text = "أرقام وأسماء مرسلي موبيليس (مفصولة بفاصلة) للتعرف على الرسائل تلقائياً:",
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 16.sp
                     )
 
-                    // Mobilis
+                    // Mobilis Card
                     Card(
                         shape = RoundedCornerShape(12.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -342,7 +657,7 @@ fun SettingsDialog(
                                 value = mobilisSenders,
                                 onValueChange = { mobilisSenders = it },
                                 label = { Text("أرقام أو أسماء موبيليس", fontSize = 11.sp) },
-                                placeholder = { Text("مثال: 644, 600, Arseli, 0661234567", fontSize = 11.sp) },
+                                placeholder = { Text("مثال: 644, 600, 606, Arseli, Mobilis, MOBILIS", fontSize = 11.sp) },
                                 shape = RoundedCornerShape(8.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -358,7 +673,7 @@ fun SettingsDialog(
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                                 verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                listOf("644", "600", "Arseli", "Mobilis").forEach { tag ->
+                                listOf("644", "600", "606", "Arseli", "Mobilis", "MOBILIS").forEach { tag ->
                                     Surface(
                                         shape = RoundedCornerShape(6.dp),
                                         color = MobilisGreen.copy(alpha = 0.1f),
@@ -372,148 +687,6 @@ fun SettingsDialog(
                                             text = "+ $tag",
                                             fontSize = 10.sp,
                                             color = MobilisGreen,
-                                            fontWeight = FontWeight.SemiBold,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Djezzy
-                    Card(
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        border = BorderStroke(1.dp, DjezzyRed.copy(alpha = 0.5f)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(10.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(10.dp)
-                                        .clip(CircleShape)
-                                        .background(DjezzyRed)
-                                )
-                                Text(
-                                    text = "جيزي (Djezzy)",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = DjezzyRed
-                                )
-                            }
-                            OutlinedTextField(
-                                value = djezzySenders,
-                                onValueChange = { djezzySenders = it },
-                                label = { Text("أرقام أو أسماء جيزي", fontSize = 11.sp) },
-                                placeholder = { Text("مثال: 710, 700, Flexy, 0770123456", fontSize = 11.sp) },
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("djezzy_senders_input"),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = DjezzyRed,
-                                    focusedLabelColor = DjezzyRed
-                                ),
-                                singleLine = false,
-                                maxLines = 2
-                            )
-                            FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                listOf("710", "700", "Flexy", "Djezzy").forEach { tag ->
-                                    Surface(
-                                        shape = RoundedCornerShape(6.dp),
-                                        color = DjezzyRed.copy(alpha = 0.1f),
-                                        modifier = Modifier.clickable {
-                                            if (!djezzySenders.contains(tag, ignoreCase = true)) {
-                                                djezzySenders = if (djezzySenders.isBlank()) tag else "$djezzySenders, $tag"
-                                            }
-                                        }
-                                    ) {
-                                        Text(
-                                            text = "+ $tag",
-                                            fontSize = 10.sp,
-                                            color = DjezzyRed,
-                                            fontWeight = FontWeight.SemiBold,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Ooredoo
-                    Card(
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        border = BorderStroke(1.dp, OoredooRuby.copy(alpha = 0.5f)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(10.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(10.dp)
-                                        .clip(CircleShape)
-                                        .background(OoredooRuby)
-                                )
-                                Text(
-                                    text = "أوريدو (Ooredoo)",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = OoredooRuby
-                                )
-                            }
-                            OutlinedTextField(
-                                value = ooredooSenders,
-                                onValueChange = { ooredooSenders = it },
-                                label = { Text("أرقام أو أسماء أوريدو", fontSize = 11.sp) },
-                                placeholder = { Text("مثال: 555, 500, Storm, Maxy, 0550123456", fontSize = 11.sp) },
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("ooredoo_senders_input"),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = OoredooRuby,
-                                    focusedLabelColor = OoredooRuby
-                                ),
-                                singleLine = false,
-                                maxLines = 2
-                            )
-                            FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                listOf("555", "500", "Storm", "Maxy", "Ooredoo").forEach { tag ->
-                                    Surface(
-                                        shape = RoundedCornerShape(6.dp),
-                                        color = OoredooRuby.copy(alpha = 0.1f),
-                                        modifier = Modifier.clickable {
-                                            if (!ooredooSenders.contains(tag, ignoreCase = true)) {
-                                                ooredooSenders = if (ooredooSenders.isBlank()) tag else "$ooredooSenders, $tag"
-                                            }
-                                        }
-                                    ) {
-                                        Text(
-                                            text = "+ $tag",
-                                            fontSize = 10.sp,
-                                            color = OoredooRuby,
                                             fontWeight = FontWeight.SemiBold,
                                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                         )
@@ -543,7 +716,7 @@ fun SettingsDialog(
                             modifier = Modifier.size(18.dp)
                         )
                         Text(
-                            text = "مثال: عند دخول فليكسي 100 ألف (1000 دج)، يتم خصم 10% (100 دج) ويصبح الصافي 900 دج (90 ألف).",
+                            text = "مثال موبيليس: عند شحن 100 دج أو 1000 دج، يتم اقتطاع 10% تلقائياً وحساب الصافي بدقة.",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurface
                         )
@@ -604,7 +777,7 @@ fun SettingsDialog(
                             color = VibrantPurplePrimary.copy(alpha = 0.12f)
                         ) {
                             Text(
-                                text = "v1.0.7",
+                                text = "v2.1.0.2008",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = VibrantPurplePrimary,
@@ -638,7 +811,7 @@ fun SettingsDialog(
             Button(
                 onClick = {
                     onSavePercentage(selectedPercentage)
-                    onSaveOperatorSenders(mobilisSenders, djezzySenders, ooredooSenders)
+                    onSaveOperatorSenders(mobilisSenders)
                     onDismiss()
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = VibrantPurplePrimary),
@@ -649,10 +822,8 @@ fun SettingsDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("إلغاء")
+                Text("إغلاق")
             }
         }
     )
 }
-
-

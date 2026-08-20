@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "حاسبة الفليكسي"
+rootProject.name = "TRACKER FLEXY MOBILIS ONLY"
 
 include(":app")

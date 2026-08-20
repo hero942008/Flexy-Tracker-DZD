@@ -13,8 +13,10 @@ data class ParsedFlexySms(
 object FlexySmsParser {
 
     /**
-     * Attempts to parse an incoming SMS as an Algerian Flexy / mobile credit transfer message.
-     * Supports configurable sender numbers for Mobilis, Djezzy, and Ooredoo.
+     * Attempts to parse an incoming SMS as a Mobilis Flexy / mobile credit transfer message.
+     * Supports configurable sender numbers for Mobilis (644, 600, 606, Arseli, Mobilis, MOBILIS, etc.)
+     * and intelligent regex extraction for phrases like:
+     * "Vous avez rechargé 100.00 DZD DA avec succès le 13/08/2026 15:52:46..."
      */
     fun parse(
         sender: String?,
@@ -53,14 +55,6 @@ object FlexySmsParser {
                 val t = token.lowercase().trim()
                 if (t.isNotEmpty() && (s == t || s.contains(t))) return "Mobilis"
             }
-            for (token in config.getDjezzyTokens()) {
-                val t = token.lowercase().trim()
-                if (t.isNotEmpty() && (s == t || s.contains(t))) return "Djezzy"
-            }
-            for (token in config.getOoredooTokens()) {
-                val t = token.lowercase().trim()
-                if (t.isNotEmpty() && (s == t || s.contains(t))) return "Ooredoo"
-            }
         }
 
         // 2. Check user-configured sender tokens against body keywords
@@ -68,60 +62,56 @@ object FlexySmsParser {
             val t = token.lowercase().trim()
             if (t.length >= 3 && b.contains(t)) return "Mobilis"
         }
-        for (token in config.getDjezzyTokens()) {
-            val t = token.lowercase().trim()
-            if (t.length >= 3 && b.contains(t)) return "Djezzy"
-        }
-        for (token in config.getOoredooTokens()) {
-            val t = token.lowercase().trim()
-            if (t.length >= 3 && b.contains(t)) return "Ooredoo"
-        }
 
-        // 3. Fallback standard Algerian operator keywords
-        return when {
-            s.contains("mobilis") || s == "644" || s == "600" || b.contains("mobilis") || b.contains("arseli") || b.contains("أرسلي") || b.contains("موبيليس") -> "Mobilis"
-            s.contains("djezzy") || s == "710" || s == "700" || b.contains("djezzy") || b.contains("flexy") || b.contains("فليكسي") || b.contains("جيزي") -> "Djezzy"
-            s.contains("ooredoo") || s == "555" || s == "500" || b.contains("ooredoo") || b.contains("storm") || b.contains("maxy") || b.contains("نجمة") || b.contains("اوريدو") || b.contains("أوريدو") -> "Ooredoo"
-            else -> "فليكسي"
-        }
+        // 3. Fallback standard Mobilis keywords
+        return "Mobilis"
     }
 
     private fun extractAmount(body: String): Double? {
-        // Common regex patterns for Flexy messages in Algeria:
-        // Pattern 1: "reçu ... 1000 DA" / "rechargement de 1000.00 DA" / "1000 DA"
+        // Regex patterns tailored for Mobilis Flexy messages in Algeria:
+        // Priority Pattern 1: "Vous avez rechargé 100.00 DZD DA avec succès" / "rechargé 100.00 DZD" / "100.00 DZD DA"
         val regexPatterns = listOf(
-            // "de 1000 DA" or "1000.00 DA" or "1000 DA" or "1000 DZD"
-            Pattern.compile("(?i)(?:rechargement|recharge|solde|cr[ée]dit|re[çc]u|montant|valeur|somme|vers[ée])\\s*(?:de|d'un montant de|:)?\\s*([0-9]+(?:[.,][0-9]{1,2})?)\\s*(?:DA|دج|DZD)", Pattern.CASE_INSENSITIVE),
+            // Target specific Mobilis format: "rechargé 100.00 DZD DA" / "rechargé 100.00 DZD" / "rechargé 1000 DA"
+            Pattern.compile("(?i)(?:recharg[ée]|rechargement|recharge|solde|cr[ée]dit|re[çc]u|montant|valeur|somme|vers[ée])\\s*(?:de|d'un montant de|:)?\\s*([0-9]+(?:[.,][0-9]{1,2})?)\\s*(?:DZD\\s*DA|DZD|DA|دج)", Pattern.CASE_INSENSITIVE),
+            
             // Arabic format: "تم شحن / تعبئة رصيدك بمبلغ 1000 دج"
-            Pattern.compile("(?:شحن|تعبئة|استلام|رصيد|مبلغ|تم تحويل)\\s*([0-9]+(?:[.,][0-9]{1,2})?)\\s*(?:دج|دينار|DA|DZD)", Pattern.CASE_INSENSITIVE),
-            // Fallback: Number followed immediately or closely by DA / دج / DZD
-            Pattern.compile("([0-9]+(?:[.,][0-9]{1,2})?)\\s*(?:DA|دج|DZD)", Pattern.CASE_INSENSITIVE),
-            // Number followed by DA in parenthesis or prefix
+            Pattern.compile("(?:شحن|تعبئة|استلام|رصيد|مبلغ|تم تحويل|تمت تعبئة)\\s*([0-9]+(?:[.,][0-9]{1,2})?)\\s*(?:دج|دينار|DA|DZD)", Pattern.CASE_INSENSITIVE),
+            
+            // Number followed by DZD DA or DZD or DA
+            Pattern.compile("([0-9]+(?:[.,][0-9]{1,2})?)\\s*(?:DZD\\s*DA|DZD|DA|دج)", Pattern.CASE_INSENSITIVE),
+            
+            // Fallback: Number before/after DA
             Pattern.compile("(?i)DA\\s*([0-9]+(?:[.,][0-9]{1,2})?)", Pattern.CASE_INSENSITIVE)
         )
 
         for (pattern in regexPatterns) {
             val matcher = pattern.matcher(body)
             if (matcher.find()) {
-                val match = matcher.group(1)?.replace(",", ".")?.trim()
-                val parsed = match?.toDoubleOrNull()
+                val matchGroup = matcher.group(1)?.replace(",", ".")?.trim()
+                val parsed = matchGroup?.toDoubleOrNull()
                 if (parsed != null && parsed > 0) {
                     return parsed
                 }
             }
         }
 
+        // Generic fallback: find any standalone number that fits typical flexy recharge amounts
+        val fallbackPattern = Pattern.compile("\\b([0-9]{2,7}(?:\\.[0-9]{1,2})?)\\b")
+        val fallbackMatcher = fallbackPattern.matcher(body)
+        while (fallbackMatcher.find()) {
+            val candidate = fallbackMatcher.group(1)?.toDoubleOrNull()
+            if (candidate != null && candidate >= 50 && candidate <= 500000) {
+                // If it looks like a year/date like 2024, 2025, 2026 skip if it's near slashes
+                val matchStart = fallbackMatcher.start()
+                val matchEnd = fallbackMatcher.end()
+                val beforeChar = if (matchStart > 0) body[matchStart - 1] else ' '
+                val afterChar = if (matchEnd < body.length) body[matchEnd] else ' '
+                if (beforeChar != '/' && beforeChar != '-' && afterChar != '/' && afterChar != '-') {
+                    return candidate
+                }
+            }
+        }
+
         return null
     }
-
-    /**
-     * Provide ready sample SMS texts to easily test the app in emulator or on device.
-     */
-    val SAMPLE_TEST_MESSAGES = listOf(
-        Pair("Mobilis (644)", "Arseli: Vous avez reçu un rechargement de 1000 DA de 0661234567. Votre nouveau solde est 1500.00 DA."),
-        Pair("Djezzy (710)", "Djezzy Flexy: Rechargement de 2000 DA effectué avec succès. Merci de votre fidélité."),
-        Pair("Ooredoo (555)", "Storm Ooredoo: Vous avez reçu 500 DA. Nouveau solde: 750 DA."),
-        Pair("موبيليس (بالعربية)", "أرسلي: تم تعبئة رصيدك بمبلغ 1000 دج بنجاح."),
-        Pair("جيزي (بالعربية)", "فليكسي جيزي: تم استلام مبلغ 2000 دج في حسابك.")
-    )
 }

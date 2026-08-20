@@ -4,9 +4,6 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -16,29 +13,31 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -63,17 +62,11 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.repository.CurrencyMode
 import com.example.data.repository.DateFilter
-import com.example.ui.components.AddTransactionDialog
-import com.example.ui.components.QuickAddBar
 import com.example.ui.components.SettingsDialog
-import com.example.ui.components.SmsTestDialog
 import com.example.ui.components.SummaryCards
 import com.example.ui.components.TransactionItem
-import com.example.ui.theme.OnVibrantBlueFab
 import com.example.ui.theme.OnVibrantPurpleContainer
-import com.example.ui.theme.VibrantBlueFab
 import com.example.ui.theme.VibrantFeeRed
-import com.example.ui.theme.VibrantNetGreen
 import com.example.ui.theme.VibrantPurpleContainer
 import com.example.ui.theme.VibrantPurplePrimary
 import com.example.ui.viewmodel.FlexyViewModel
@@ -108,15 +101,20 @@ fun HomeScreen(
     }
 
     Scaffold(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxSize()
+            .navigationBarsPadding(),
         topBar = {
             Surface(
                 color = MaterialTheme.colorScheme.surface,
-                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                shadowElevation = 2.dp,
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .statusBarsPadding()
                         .padding(horizontal = 16.dp, vertical = 12.dp)
                 ) {
                     Row(
@@ -144,13 +142,13 @@ fun HomeScreen(
                             }
                             Column {
                                 Text(
-                                    text = "حاسبة الفليكسي",
+                                    text = "حاسبة الفليكسي - موبيليس",
                                     fontSize = 18.sp,
                                     fontWeight = FontWeight.Black,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = "حساب واقتطاع الصافي تلقائياً",
+                                    text = "كشف رصيد Mobilis واقتطاع الصافي تلقائياً",
                                     fontSize = 11.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -162,18 +160,6 @@ fun HomeScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            // SMS Test button
-                            IconButton(
-                                onClick = { viewModel.setSmsTestDialogOpen(true) },
-                                modifier = Modifier.testTag("sms_test_top_btn")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Sms,
-                                    contentDescription = "تجربة رسالة فليكسي",
-                                    tint = VibrantPurplePrimary
-                                )
-                            }
-
                             // Share Summary Button
                             IconButton(
                                 onClick = { viewModel.shareSummary(context) },
@@ -237,7 +223,7 @@ fun HomeScreen(
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Text(
-                                    text = if (uiState.isSmsPermissionGranted) "قراءة رسائل الفليكسي التلقائية (موبيليس، جيزي، أوريدو) مفعّلة" else "انقر هنا لتفعيل قراءة رسائل الفليكسي التلقائية",
+                                    text = if (uiState.isSmsPermissionGranted) "قراءة رسائل فليكسي موبيليس (Mobilis) التلقائية مفعّلة" else "انقر هنا لتفعيل قراءة رسائل فليكسي موبيليس التلقائية",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = if (uiState.isSmsPermissionGranted) OnVibrantPurpleContainer else VibrantFeeRed
@@ -247,27 +233,6 @@ fun HomeScreen(
                     }
                 }
             }
-        },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { viewModel.setAddDialogOpen(true) },
-                icon = {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = null
-                    )
-                },
-                text = {
-                    Text(
-                        text = "تسجيل فليكسي",
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                containerColor = VibrantBlueFab,
-                contentColor = OnVibrantBlueFab,
-                shape = RoundedCornerShape(18.dp),
-                modifier = Modifier.testTag("fab_add_flexy")
-            )
         }
     ) { innerPadding ->
         LazyColumn(
@@ -331,17 +296,7 @@ fun HomeScreen(
                 )
             }
 
-            // 3. Quick Add Bar
-            item {
-                QuickAddBar(
-                    onQuickAdd = { amount ->
-                        viewModel.addManualTransaction(amount)
-                    },
-                    onCustomAdd = { viewModel.setAddDialogOpen(true) }
-                )
-            }
-
-            // 4. Transactions List Header
+            // 3. Transactions List Header
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -349,7 +304,7 @@ fun HomeScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "سجل العمليات (${uiState.filteredTransactions.size})",
+                        text = "سجل تعبئات موبيليس (${uiState.filteredTransactions.size})",
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -365,7 +320,7 @@ fun HomeScreen(
                 }
             }
 
-            // 5. Transactions List or Empty State
+            // 4. Transactions List or Empty State
             if (uiState.filteredTransactions.isEmpty()) {
                 item {
                     Card(
@@ -407,7 +362,7 @@ fun HomeScreen(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "استخدم أزرار الإضافة السريعة أعلاه أو جرب محاكاة رسالة SMS",
+                                text = "يتم تسجيل الرسائل وتتبع الرصيد الصافي تلقائياً فور وصول رسائل التأكيد من موبيليس (Mobilis) أو عبر الإدخال اليدوي المقفل من الإعدادات.",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -428,32 +383,10 @@ fun HomeScreen(
                 }
             }
 
-            // Bottom Spacer for FAB clearance
             item {
-                Spacer(modifier = Modifier.height(72.dp))
+                Spacer(modifier = Modifier.height(24.dp))
             }
         }
-    }
-
-    // Dialogs
-    if (uiState.isAddDialogOpen) {
-        AddTransactionDialog(
-            defaultPercentage = uiState.cutPercentage,
-            currencyMode = uiState.currencyMode,
-            onDismiss = { viewModel.setAddDialogOpen(false) },
-            onConfirm = { amount, operator, percentage, note ->
-                viewModel.addManualTransaction(amount, operator, percentage, note)
-            }
-        )
-    }
-
-    if (uiState.isSmsTestDialogOpen) {
-        SmsTestDialog(
-            onDismiss = { viewModel.setSmsTestDialogOpen(false) },
-            onSimulate = { sender, body ->
-                viewModel.simulateSmsReceived(sender, body)
-            }
-        )
     }
 
     if (uiState.isSettingsDialogOpen) {
@@ -463,15 +396,17 @@ fun HomeScreen(
             operatorSenders = uiState.operatorSenderConfig,
             onDismiss = { viewModel.setSettingsDialogOpen(false) },
             onSavePercentage = { viewModel.setCutPercentage(it) },
-            onSaveOperatorSenders = { mob, dj, oor ->
-                viewModel.saveOperatorSenders(mob, dj, oor)
+            onSaveOperatorSenders = { mob ->
+                viewModel.saveOperatorSenders(mob)
             },
             onResetOperatorSenders = {
                 viewModel.resetOperatorSenders()
             },
             onToggleCurrency = { viewModel.setCurrencyMode(it) },
-            onClearAll = { viewModel.clearAll() }
+            onClearAll = { viewModel.clearAll() },
+            onAddManualTransaction = { amount, note ->
+                viewModel.addManualTransaction(amount = amount, note = note)
+            }
         )
     }
 }
-

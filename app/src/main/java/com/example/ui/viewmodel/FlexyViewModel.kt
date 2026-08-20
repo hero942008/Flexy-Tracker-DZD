@@ -36,8 +36,6 @@ data class FlexyUiState(
     val cutPercentage: Double = 10.0,
     val operatorSenderConfig: OperatorSenderConfig = OperatorSenderConfig(),
     val isSmsPermissionGranted: Boolean = false,
-    val isAddDialogOpen: Boolean = false,
-    val isSmsTestDialogOpen: Boolean = false,
     val isSettingsDialogOpen: Boolean = false
 )
 
@@ -50,12 +48,6 @@ class FlexyViewModel(
 
     private val _isSmsPermissionGranted = MutableStateFlow(false)
     val isSmsPermissionGranted = _isSmsPermissionGranted.asStateFlow()
-
-    private val _isAddDialogOpen = MutableStateFlow(false)
-    val isAddDialogOpen = _isAddDialogOpen.asStateFlow()
-
-    private val _isSmsTestDialogOpen = MutableStateFlow(false)
-    val isSmsTestDialogOpen = _isSmsTestDialogOpen.asStateFlow()
 
     private val _isSettingsDialogOpen = MutableStateFlow(false)
     val isSettingsDialogOpen = _isSettingsDialogOpen.asStateFlow()
@@ -84,11 +76,9 @@ class FlexyViewModel(
 
     private val dialogsState = combine(
         _isSmsPermissionGranted,
-        _isAddDialogOpen,
-        _isSmsTestDialogOpen,
         _isSettingsDialogOpen
-    ) { smsPerm, addOpen, smsTestOpen, settingsOpen ->
-        listOf(smsPerm, addOpen, smsTestOpen, settingsOpen)
+    ) { smsPerm, settingsOpen ->
+        Pair(smsPerm, settingsOpen)
     }
 
     val uiState: StateFlow<FlexyUiState> = combine(
@@ -96,7 +86,7 @@ class FlexyViewModel(
         appSettings,
         _selectedFilter,
         dialogsState
-    ) { (items, filtered, summary), (currency, percent, sendersConfig), filter, dialogs ->
+    ) { (items, filtered, summary), (currency, percent, sendersConfig), filter, (smsPerm, settingsOpen) ->
         FlexyUiState(
             transactions = items,
             filteredTransactions = filtered,
@@ -105,10 +95,8 @@ class FlexyViewModel(
             currencyMode = currency,
             cutPercentage = percent,
             operatorSenderConfig = sendersConfig,
-            isSmsPermissionGranted = dialogs[0],
-            isAddDialogOpen = dialogs[1],
-            isSmsTestDialogOpen = dialogs[2],
-            isSettingsDialogOpen = dialogs[3]
+            isSmsPermissionGranted = smsPerm,
+            isSettingsDialogOpen = settingsOpen
         )
     }.stateIn(
         scope = viewModelScope,
@@ -128,12 +116,10 @@ class FlexyViewModel(
         repository.setDefaultPercentage(percent)
     }
 
-    fun saveOperatorSenders(mobilis: String, djezzy: String, ooredoo: String) {
+    fun saveOperatorSenders(mobilis: String) {
         repository.setOperatorSenders(
             OperatorSenderConfig(
-                mobilisSenders = mobilis.trim(),
-                djezzySenders = djezzy.trim(),
-                ooredooSenders = ooredoo.trim()
+                mobilisSenders = mobilis.trim()
             )
         )
     }
@@ -144,14 +130,6 @@ class FlexyViewModel(
 
     fun setSmsPermissionGranted(granted: Boolean) {
         _isSmsPermissionGranted.value = granted
-    }
-
-    fun setAddDialogOpen(open: Boolean) {
-        _isAddDialogOpen.value = open
-    }
-
-    fun setSmsTestDialogOpen(open: Boolean) {
-        _isSmsTestDialogOpen.value = open
     }
 
     fun setSettingsDialogOpen(open: Boolean) {
@@ -173,22 +151,6 @@ class FlexyViewModel(
                 isAutoDetected = false,
                 note = note
             )
-            _isAddDialogOpen.value = false
-        }
-    }
-
-    fun simulateSmsReceived(sender: String, body: String) {
-        val parsed = FlexySmsParser.parse(sender, body, uiState.value.operatorSenderConfig) ?: return
-        viewModelScope.launch {
-            repository.addTransaction(
-                amount = parsed.amount,
-                cutPercentage = uiState.value.cutPercentage,
-                operatorName = parsed.operator,
-                senderNumber = parsed.sender,
-                rawMessage = parsed.rawBody,
-                isAutoDetected = true
-            )
-            _isSmsTestDialogOpen.value = false
         }
     }
 
