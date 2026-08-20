@@ -18,7 +18,15 @@ if not exist .env (
     )
 )
 
-rem 2. Auto-detect or prompt for Android SDK
+rem 2. Ensure debug.keystore exists
+if not exist debug.keystore (
+    if exist debug.keystore.base64 (
+        certutil -decode debug.keystore.base64 debug.keystore >nul 2>&1
+        echo [INFO] Decoded debug.keystore from base64.
+    )
+)
+
+rem 3. Auto-detect or prompt for Android SDK
 if "%ANDROID_HOME%"=="" (
     if "%ANDROID_SDK_ROOT%"=="" (
         if not exist local.properties (
@@ -51,7 +59,7 @@ if "%ANDROID_HOME%"=="" (
     )
 )
 
-rem 3. Ensure gradle-wrapper.jar exists if missing
+rem 4. Ensure gradle-wrapper.jar exists if missing
 if not exist "gradle\wrapper\gradle-wrapper.jar" (
     echo [INFO] gradle-wrapper.jar not found locally.
     echo [INFO] Downloading Gradle Wrapper JAR...
@@ -59,7 +67,7 @@ if not exist "gradle\wrapper\gradle-wrapper.jar" (
     powershell -Command "[Net.SecurityProtocolType]::Tls12; (New-Object System.Net.WebClient).DownloadFile('https://raw.githubusercontent.com/gradle/gradle/v8.13.0/gradle/wrapper/gradle-wrapper.jar', 'gradle\wrapper\gradle-wrapper.jar')" 2>nul
 )
 
-rem 4. Execute build with fallback to system gradle if needed
+rem 5. Execute build with fallback to system gradle if needed
 if exist "gradle\wrapper\gradle-wrapper.jar" (
     echo [INFO] Running Gradle Wrapper...
     call gradlew.bat assembleDebug

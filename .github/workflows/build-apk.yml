@@ -34,12 +34,20 @@ jobs:
           gradle-version: '9.3.1'
           cache-cleanup: always
 
-      - name: Ensure Environment and Config Files
+      - name: Ensure Environment and Keystore Files
         run: |
           if [ ! -f .env ] && [ -f .env.example ]; then
             cp .env.example .env
           elif [ ! -f .env ]; then
             touch .env
+          fi
+
+          if [ -f debug.keystore.base64 ]; then
+            base64 -d debug.keystore.base64 > debug.keystore
+          fi
+
+          if [ ! -f debug.keystore ]; then
+            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
 
       - name: Build Debug APK
