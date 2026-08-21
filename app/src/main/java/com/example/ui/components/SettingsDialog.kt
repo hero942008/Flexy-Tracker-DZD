@@ -777,7 +777,7 @@ fun SettingsDialog(
                             color = VibrantPurplePrimary.copy(alpha = 0.12f)
                         ) {
                             Text(
-                                text = "v2.1.0.2008",
+                                text = "v2.2.1",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = VibrantPurplePrimary,

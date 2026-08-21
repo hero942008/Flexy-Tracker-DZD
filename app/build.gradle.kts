@@ -17,8 +17,8 @@ android {
     applicationId = "com.aistudio.flexytracker.pcuplu"
     minSdk = 24
     targetSdk = 36
-    versionCode = 2008
-    versionName = "2.1.0.2008"
+    versionCode = 221
+    versionName = "2.2.1"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

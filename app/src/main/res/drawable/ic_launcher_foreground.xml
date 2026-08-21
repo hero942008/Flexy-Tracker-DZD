@@ -3,6 +3,6 @@
     <item
         android:width="66dp"
         android:height="66dp"
-        android:drawable="@drawable/mobilis_tracker_icon_1787237678407"
+        android:drawable="@drawable/flexy_tracker_icon_1786745470948"
         android:gravity="center" />
 </layer-list>
